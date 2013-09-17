@@ -61,8 +61,6 @@ class SourceQuery(asyncore.dispatcher):
 		
 		self.reset();
 		
-		print "Query of %s:%d initialized" % (server[0], server[1]);
-		
 	def reset(self):
 		self.splitted = {};
 		
@@ -100,6 +98,14 @@ class SourceQuery(asyncore.dispatcher):
 	
 	def handle_close(self):
 		self.close();
+		
+	def handle_expt(self):
+		print "WAT?";
+		self.close();
+		
+	def handle_error(self):
+		print "error";
+		self.close();
 	
 	def handle_read(self):
 		if self.pingtime:
@@ -119,6 +125,7 @@ class SourceQuery(asyncore.dispatcher):
 				# When saved, remove from list, so won't be queried again
 				if self.oldInfoResponse:
 					self.oldInfoResponse = False;
+					self.queryResponse['protocol'] = "47+48";
 				else:
 					self.queryList.remove("info");
 				
@@ -143,6 +150,8 @@ class SourceQuery(asyncore.dispatcher):
 				# It also comes together with new info response from servers with dproto with hybrid (p.47+p.48) query
 				# It has less info, so we prefer new response. It will be saved to temp field.
 				# This field will be deleted when new response comes. When there is no new response, values will be moved to normal fields
+				
+				self._parse_oldinfo(recPacket);
 				
 				# We also want it only once, as usualy :) But we will mark it different way.
 				self.queryList.remove("info");
@@ -175,8 +184,11 @@ class SourceQuery(asyncore.dispatcher):
 					
 					self.buffer = rulesPacket.getvalue();
 			else:
+				if self.oldInfoResponse:
+					self.queryResponse.update(self.temp);
 				self.close();
-				
+		else:
+			print "empty?";
 			
 	
 	def _get_packet(self):
@@ -260,7 +272,44 @@ class SourceQuery(asyncore.dispatcher):
 					return;
 			return;
 	
-	
+	def _parse_oldinfo(self, packet):
+		
+		# old query response goes into temp
+		self.temp = {}
+		
+		self.temp['address']					= packet.getString();		# dummy value... we are arleady know that...
+		self.temp['hostname']					= packet.getString();
+		self.temp['mapname']					= packet.getString();
+		self.temp['game']						= packet.getString();
+		self.temp['gamename']					= packet.getString();
+		self.temp['playerscount']				= packet.getByte();
+		self.temp['playersmax']					= packet.getByte();
+		self.temp['protocol']					= packet.getByte();
+		servertype = chr(packet.getByte()).upper();
+		self.temp['servertype']					= "Dedicated" if servertype == 'D' else \
+												  "Listen" if servertype == 'L' else \
+												  "HLTV" if servertype == 'P' else \
+												  "Undefined";
+		os = chr(packet.getByte()).upper();
+		self.temp['os']							= "Windows" if os == "W" else \
+												  "Linux" if os == "L" else \
+												  "Undefined";
+		self.temp['password']					= packet.getByte() == 1;
+		mod = packet.getByte() == 1;
+		if mod:
+			mod = {};
+			mod['link']							= packet.getString();
+			mod['download']						= packet.getString();
+			mod['null']							= packet.getByte();
+			mod['version']						= packet.getLong();
+			mod['size']							= packet.getLong();
+			mod['type']							= "Single/multi-player" if packet.getByte() == 0 else \
+												  "Multiplayer only";
+			mod['dll']							= "Own dll" if packet.getByte() == 1 else \
+												  "Half-Life dll";
+			self.temp['mod'] = mod;
+		self.temp['secure']						= packet.getByte() == 1;
+		self.temp['botscount']					= packet.getByte();
 	def _parse_info(self, packet):
 	
 		# REMEMBER !! ALL KEY NAMES MUST BE NORMALIZED FOR EVERY PROTOCOL !!
@@ -273,8 +322,12 @@ class SourceQuery(asyncore.dispatcher):
 		self.queryResponse['playerscount']		= packet.getByte()
 		self.queryResponse['playersmax']		= packet.getByte()
 		self.queryResponse['botscount']			= packet.getByte()
-		self.queryResponse['servertype']		= "Dedicated" if chr(packet.getByte()) == "d" else "Listen";
-		self.queryResponse['os']				= "Linux" if chr(packet.getByte()) == "l" else "Windows";
+		servertype = chr(packet.getByte()).upper();
+		self.queryResponse['servertype']		= "Dedicated" if servertype == "D" else \
+												  "Listen";
+		os = chr(packet.getByte()).upper()
+		self.queryResponse['os']				= "Linux" if os == "L" else \
+												  "Windows";
 		self.queryResponse['password']			= packet.getByte() == 1;
 		self.queryResponse['secure']			= packet.getByte() == 1;
 		
