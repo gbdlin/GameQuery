@@ -3,7 +3,7 @@
 
 """
 	This is an useful library, that can query many of game servers at once (asynchronous)
-   Support of query'ing game depends on xxxQuery.py files in that directory.
+   Support of query'ing game depends on *Query.py files in that directory.
    This means that if SourceQuery.py is present, you can query Source engine servers.
 """
 
@@ -50,7 +50,7 @@ class QueryPacket(StringIO.StringIO):
         return val
 
 class GameQuery(object):
-	def __init__(self, serverList={}, timeout=10):
+	def __init__(self, serverList={}, timeout=10.0):
 	
 		self.queryList = {};
 		self.responseList = {};
@@ -77,7 +77,7 @@ class GameQuery(object):
 			if name in self.responseList:
 				self.queryList[name].reset();
 			self.queryList[name].connect();
-		asyncore.loop();
+		asyncore.loop(timeout=0.1, count=25);
 		
 		self.responseList = {};
 		
